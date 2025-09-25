@@ -3,7 +3,10 @@ services:
     name: mcd-web-frontend
     env: static
     branch: main
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --legacy-peer-deps && npm run build
     staticPublishPath: build
     pullRequestPreviewsEnabled: true
     autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20.15.1
