@@ -4,6 +4,8 @@ import {
   Heading,
   Spacer,
   IconButton,
+  HStack,
+  Text,
   useColorMode,
   Avatar,
   Menu,
@@ -14,11 +16,20 @@ import {
 import { FiMoon, FiSun, FiBell } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useNavigate } from 'react-router-dom';
 
 const Header = () => {
   const { colorMode, toggleColorMode } = useColorMode();
   const { currentUser } = useAuth();
   const { darkMode, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+
+  const handleScroll = (sectionId) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   // Toggle both Chakra UI color mode and custom theme context
   const handleThemeToggle = () => {
@@ -42,6 +53,31 @@ const Header = () => {
       <Heading size="md">MCD Street Light Control System</Heading>
       <Spacer />
       <Flex align="center">
+        <HStack spacing={4} display={{ base: 'none', md: 'flex' }} mr={4}>
+          <IconButton
+            aria-label="Features"
+            icon={<Text>Features</Text>}
+            variant="ghost"
+            onClick={() => handleScroll('features')}
+          />
+
+          {!currentUser && (
+            <>
+              <IconButton
+                aria-label="Login"
+                icon={<Text>Login</Text>}
+                variant="ghost"
+                onClick={() => navigate('/login')}
+              />
+              <IconButton
+                aria-label="Sign Up"
+                icon={<Text>Sign Up</Text>}
+                variant="ghost"
+                onClick={() => navigate('/signup')}
+              />
+            </>
+          )}
+        </HStack>
         <IconButton
           aria-label="Toggle dark mode"
           icon={darkMode ? <FiSun /> : <FiMoon />}
@@ -49,21 +85,25 @@ const Header = () => {
           variant="ghost"
           mr={2}
         />
-        <IconButton
-          aria-label="Notifications"
-          icon={<FiBell />}
-          variant="ghost"
-          mr={4}
-        />
-        <Menu>
-          <MenuButton>
-            <Avatar size="sm" name={currentUser?.displayName || 'User'} />
-          </MenuButton>
-          <MenuList>
-            <MenuItem>Profile</MenuItem>
-            <MenuItem>Settings</MenuItem>
-          </MenuList>
-        </Menu>
+        {currentUser && (
+          <>
+            <IconButton
+              aria-label="Notifications"
+              icon={<FiBell />}
+              variant="ghost"
+              mr={4}
+            />
+            <Menu>
+              <MenuButton>
+                <Avatar size="sm" name={currentUser?.displayName || 'User'} />
+              </MenuButton>
+              <MenuList>
+                <MenuItem>Profile</MenuItem>
+                <MenuItem>Settings</MenuItem>
+              </MenuList>
+            </Menu>
+          </>
+        )}
       </Flex>
     </Flex>
   );

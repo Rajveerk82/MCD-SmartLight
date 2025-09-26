@@ -6,6 +6,7 @@ import { useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Signup from './pages/signup';
 import Dashboard from './pages/Dashboard';
+import Home from './pages/Home';
 import Devices from './pages/devices';
 import DeviceDetail from './pages/DeviceDetail';
 import DeviceSetup from './pages/devicesetup';
@@ -20,12 +21,23 @@ import Layout from './components/Layout';
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const { currentUser } = useAuth();
-  
   if (!currentUser) {
     return <Navigate to="/login" />;
   }
-  
   return <Layout>{children}</Layout>;
+};
+
+// Root route decides Home or Dashboard
+const RootPage = () => {
+  const { currentUser } = useAuth();
+  if (currentUser) {
+    return (
+      <Layout>
+        <Dashboard />
+      </Layout>
+    );
+  }
+  return <Home />;
 };
 
 function App() {
@@ -35,12 +47,11 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         
-        <Route path="/" element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        } />
-        
+        {/* Public / Root route */}
+        <Route path="/" element={<RootPage />} />
+
+        {/* Removed separate /dashboard route; RootPage now handles dashboard when logged in */}
+
         <Route path="/devices" element={
           <ProtectedRoute>
             <Devices />
