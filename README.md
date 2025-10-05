@@ -47,10 +47,10 @@ MCD Web/
 npm install
 
 # 2. Start the development server
-npm run dev
+npm start
 
 # 3. Open your browser
-#    The app will be running at http://localhost:5173/ (default Vite port)
+#    The app will be running at http://localhost:3000/ (default CRA port)
 ```
 
 Any change in the `src/` directory triggers **hot-module reload** (HMR), so the browser refreshes instantly.
