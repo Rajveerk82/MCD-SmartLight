@@ -1,28 +1,32 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { ChakraProvider, extendTheme } from '@chakra-ui/react';
+import { ChakraProvider, extendTheme, ColorModeScript } from '@chakra-ui/react';
 import { AuthProvider } from './contexts/AuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
+// ... existing code ...
 
 const theme = extendTheme({
+  config: {
+    initialColorMode: 'light',
+    useSystemColorMode: false,
+  },
   styles: {
-    global: {
+    global: (props) => ({
       body: {
-        bg: 'gray.50',
-      }
-    }
-  }
+        bg: props.colorMode === 'dark' ? 'gray.900' : 'gray.50',
+        color: props.colorMode === 'dark' ? 'whiteAlpha.900' : 'gray.800',
+      },
+    }),
+  },
 });
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <ChakraProvider theme={theme}>
+      <ColorModeScript initialColorMode={theme.config.initialColorMode} />
       <AuthProvider>
-        <ThemeProvider>
-          <App />
-        </ThemeProvider>
+        <App />
       </AuthProvider>
     </ChakraProvider>
   </React.StrictMode>

@@ -85,6 +85,44 @@ const Schedule = () => {
     isActive: true,
   });
 
+  // Function to check and apply schedules
+  const checkAndApplySchedules = () => {
+    const now = new Date();
+    const currentDay = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()];
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    schedules.forEach(schedule => {
+      if (!schedule.isActive || !schedule.days[currentDay]) return;
+
+      const deviceRef = ref(database, `devices/${schedule.deviceId}`);
+      const device = devices.find(d => d.id === schedule.deviceId);
+      if (!device) return;
+
+      // Determine if we are inside the active window
+      const inWindow = currentTime >= schedule.startTime && currentTime <= schedule.endTime;
+      const desiredStatus = inWindow ? schedule.status : (schedule.status === 'on' ? 'off' : 'on');
+
+      // If device already has the desired status, no action needed
+      if (device.status === desiredStatus) return;
+
+      // Update device status
+      update(deviceRef, {
+        status: desiredStatus,
+        lastUpdated: now.getTime(),
+        updatedBy: 'schedule'
+      });
+
+      // Record in device history
+      const historyRef = push(ref(database, `deviceHistory/${schedule.deviceId}`));
+      set(historyRef, {
+        status: desiredStatus,
+        timestamp: now.getTime(),
+        source: 'schedule',
+        scheduleName: schedule.name
+      });
+    });
+  };
+
   useEffect(() => {
     // Fetch devices
     const devicesRef = ref(database, 'devices');
@@ -109,15 +147,22 @@ const Schedule = () => {
           ...schedule,
         }));
         setSchedules(schedulesList);
-      } else {
-        setSchedules([]);
       }
       setLoading(false);
+      
+      // Run schedule check immediately when schedules are loaded
+      checkAndApplySchedules();
     });
+    
+    // Set up interval to check and apply schedules every minute
+    const scheduleInterval = setInterval(() => {
+      checkAndApplySchedules();
+    }, 60000); // Check every minute
 
     return () => {
       devicesUnsubscribe();
       schedulesUnsubscribe();
+      clearInterval(scheduleInterval);
     };
   }, []);
 

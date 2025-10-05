@@ -12,8 +12,11 @@ import {
   FiAlertTriangle
 } from 'react-icons/fi';
 
-const Sidebar = () => {
+const Sidebar = ({ onClose }) => {
   const { logout } = useAuth();
+  const handleLinkClick = () => {
+    if (onClose) onClose();
+  };
 
   const navItems = [
     { name: 'Dashboard', icon: FiHome, path: '/' },
@@ -37,7 +40,7 @@ const Sidebar = () => {
       as="nav"
       position="sticky"
       top="0"
-      w="240px"
+      w={{ base: 'full', md: '240px' }}
       h="100vh"
       bg="blue.700"
       color="white"
@@ -55,6 +58,7 @@ const Sidebar = () => {
               backgroundColor: isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
               borderLeft: isActive ? '4px solid white' : '4px solid transparent',
             })}
+            onClick={handleLinkClick}
           >
             <Flex
               align="center"
@@ -80,7 +84,7 @@ const Sidebar = () => {
           borderRadius="lg"
           role="group"
           cursor="pointer"
-          onClick={handleLogout}
+          onClick={() => { handleLogout(); if (onClose) onClose(); }}
           mt="auto"
           mb="4"
           _hover={{

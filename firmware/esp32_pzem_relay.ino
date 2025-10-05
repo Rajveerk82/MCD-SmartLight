@@ -1,207 +1,109 @@
-/*
-  ESP32 PZEM-004T Smart Street Light Controller
-
-  - Reads voltage, current, power, energy from a PZEM-004T sensor (Modbus RTU)
-  - Publishes data to Firebase Realtime Database under /devices/{DEVICE_ID}
-  - Listens for command changes under /devices/{DEVICE_ID}/command to toggle relay ON/OFF
-  - Updates status field accordingly ("on" or "off") and clears command after execution
-
-  Hardware connections:
-    * ESP32         PZEM-004T (TTL)
-      RX2 (GPIO16)  -> TX (PZEM)
-      TX2 (GPIO17)  -> RX (PZEM)
-      5V            -> Vcc
-      GND           -> GND
-
-    * Relay module:  IN pin connected to GPIO RELAY_PIN (defaults to 4)
-
-  Required libraries:
-    - WiFi.h (built-in)
-    - Firebase_ESP_Client (by Mobizt)
-    - PZEM004Tv30 (by olehs / tobozo)
-    - ArduinoJson (dependency of Firebase lib)
-
-  Make sure to install these from the Arduino Library Manager.
-*/
-
 #include <WiFi.h>
-#include <Firebase_ESP_Client.h>
-#include <PZEM004Tv30.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include "time.h"
 
-/*************  USER CONFIGURATION  ****************/
-// Wi-Fi credentials
-#define WIFI_SSID     "YOUR_WIFI_SSID"
-#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+// ---------- CONFIG (edit as needed) ----------
+#define WIFI_SSID     "Wokwi-GUEST"
+#define WIFI_PASSWORD ""
 
-// Firebase project configuration
-#define API_KEY       "YOUR_FIREBASE_API_KEY"
-#define DATABASE_URL  "YOUR_DATABASE_URL"      // e.g. https://your-project-id.firebaseio.com
-#define DEVICE_ID     "YOUR_DEVICE_ID"         // Unique ID matching entry in database
+#define DB_HOST       "server-8f7f2-default-rtdb.firebaseio.com" // without https://
+#define DEVICE_ID     "SL001"
 
-// Relay configuration
-const uint8_t RELAY_PIN = 4;          // GPIO controlling relay module (LOW = ON for most modules)
-const bool RELAY_ACTIVE_LEVEL = LOW;  // Change to HIGH if your relay is active-high
+const uint32_t SEND_INTERVAL_MS = 5000; // 5-second sample rate
+uint32_t lastSend = 0;
 
-// Measurement interval (milliseconds)
-const unsigned long MEASUREMENT_INTERVAL = 5000;
-/***************************************************/
+#define LED_PIN LED_BUILTIN        // Wokwi built-in LED (GPIO 2)
 
-// Firebase objects
-FirebaseData fbdo;
-FirebaseAuth auth;
-FirebaseConfig config;
+// NTP (Indian Standard Time)
+const char *ntpServer = "pool.ntp.org";
+const long  gmtOffset = 19800;     // +05:30
+const int   daylightOffset = 0;
 
-// PZEM over Serial2 (GPIO16/17)
-PZEM004Tv30 pzem(&Serial2, 16, 17); // RX, TX
+// ---------- TIME ----------
+uint64_t epochMillis() {
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);               // synced via NTP
+  return (uint64_t)tv.tv_sec * 1000ULL + tv.tv_usec / 1000ULL;
+}
 
-unsigned long lastMeasurement = 0;
+// ---------- Firebase REST helpers ----------
+String url(const String &path) {
+  return "https://" + String(DB_HOST) + path;
+}
 
-void connectWiFi() {
-  Serial.print("Connecting to WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print('.');
+void sendSnapshot(float V, float I, float P, float E) {
+  HTTPClient http;
+  StaticJsonDocument<256> doc;
+  doc["voltage"]     = V;
+  doc["current"]     = I;
+  doc["power"]       = P;
+  doc["energy"]      = E;
+  doc["lastSeen"]    = epochMillis();
+  doc["lastUpdated"] = epochMillis();
+  String payload; serializeJson(doc, payload);
+
+  http.begin(url("/devices/" DEVICE_ID ".json"));
+  http.addHeader("Content-Type", "application/json");
+  http.PATCH(payload);
+  http.end();
+
+  // also push to history
+  http.begin(url("/history/" DEVICE_ID "/" + String(epochMillis()) + ".json"));
+  http.addHeader("Content-Type", "application/json");
+  http.PUT(payload);
+  http.end();
+}
+
+void pollStatus() {
+  HTTPClient http;
+  http.begin(url("/devices/" DEVICE_ID "/status.json"));
+  int code = http.GET();
+  if (code == 200) {
+    String s = http.getString();
+    s.trim(); s.replace("\"", "");
+    digitalWrite(LED_PIN, s == "on" ? HIGH : LOW);
   }
-  Serial.print("\nConnected! IP address: ");
-  Serial.println(WiFi.localIP());
+  http.end();
 }
 
-void setupFirebase() {
-  config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
-
-  // Anonymous sign-in — database rules must allow it or use email/password tokens
-  auth.user.email = "";
-  auth.user.password = "";
-
-  Firebase.reconnectNetwork(true);
-
-  Serial.println("Initializing Firebase...");
-  Firebase.begin(&config, &auth);
-
-  // Optional: Keep connection alive with autoReconnect
-  config.timeout.serverResponse = 10000; // 10s
-}
-
-void streamCallback(FirebaseStream data);
-void streamTimeoutCallback(bool timeout);
-
-void setupStreamListener() {
-  String path = String("/devices/") + DEVICE_ID + "/command";
-  if (!Firebase.RTDB.beginStream(&fbdo, path.c_str())) {
-    Serial.printf("Could not begin stream: %s\n", fbdo.errorReason().c_str());
-    return;
-  }
-  Firebase.RTDB.setStreamCallback(&fbdo, streamCallback, streamTimeoutCallback);
-  Serial.println("Listening for command changes...");
-}
-
+// ---------- SETUP ----------
 void setup() {
   Serial.begin(115200);
-  Serial2.begin(9600); // PZEM default baud rate
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, !RELAY_ACTIVE_LEVEL); // default OFF
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(250);
+    Serial.print('.');
+  }
+  Serial.println("\nWiFi connected!");
 
-  connectWiFi();
-  setupFirebase();
-  setupStreamListener();
+  configTime(gmtOffset, daylightOffset, ntpServer);
+  Serial.println("NTP time sync requested…");
+  // wait until time is obtained
+  time_t now = 0;
+  while (now < 1700000000) { // arbitrary past epoch
+    delay(200);
+    time(&now);
+  }
+  Serial.println("Time synced!");
 }
 
+// ---------- LOOP ----------
 void loop() {
-  // Ensure WiFi/Firebase connectivity
-  if (WiFi.status() != WL_CONNECTED) {
-    connectWiFi();
+  if (millis() - lastSend >= SEND_INTERVAL_MS) {
+    lastSend = millis();
+
+    float V = random(220, 241);            // 220-240 V
+    float I = random(10, 50) / 100.0;      // 0.10-0.49 A
+    float P = V * I;                       // W
+    float E = millis() / 100000.0;         // fake kWh
+
+    sendSnapshot(V, I, P, E);
+    pollStatus();
   }
 
-  if (Firebase.ready() && (millis() - lastMeasurement >= MEASUREMENT_INTERVAL)) {
-    lastMeasurement = millis();
-    publishMeasurements();
-  }
-
-  // Yield to background tasks
   delay(10);
-}
-
-void publishMeasurements() {
-  float voltage = pzem.voltage();
-  float current = pzem.current();
-  float power   = pzem.power();
-  float energy  = pzem.energy();
-
-  // Validate readings; if any value is NaN, treat as missing data
-  bool invalidReadings = isnan(voltage) || isnan(current) || isnan(power) || isnan(energy);
-  if (invalidReadings) {
-    Serial.println("[WARN] Invalid PZEM reading, reporting zeros and setting error flag");
-    voltage = 0;
-    current = 0;
-    power   = 0;
-    energy  = 0;
-  }
-
-  // Build the JSON payload
-  FirebaseJson payload;
-  payload.set("voltage", voltage);
-  payload.set("current", current);
-  payload.set("power", power);
-  payload.set("energy", energy);
-  payload.set("lastSeen", millis()); // or use time from an RTC/NTP if available
-
-  // Add / clear error field so that dashboard can raise an alert
-  if (invalidReadings) {
-    payload.set("error", "Sensor read failed");
-  } else {
-    // Clear previous error by setting empty string (falsy value in JS)
-    payload.set("error", "");
-  }
-
-  String path = String("/devices/") + DEVICE_ID;
-  if (Firebase.RTDB.updateNode(&fbdo, path.c_str(), &payload)) {
-    Serial.println("Measurements uploaded");
-  } else {
-    Serial.printf("Upload failed: %s\n", fbdo.errorReason().c_str());
-  }
-}
-
-// --- Firebase stream callbacks ---
-void streamCallback(FirebaseStream data) {
-  Serial.println("\n[Firebase] Command update received");
-  if (!data.dataTypeEnum() == fb_esp_rtdb_data_type_null) {
-    String cmd = data.stringData();
-
-    if (cmd.equalsIgnoreCase("on")) {
-      setRelay(true);
-    } else if (cmd.equalsIgnoreCase("off")) {
-      setRelay(false);
-    }
-  }
-}
-
-void streamTimeoutCallback(bool timeout) {
-  if (timeout) {
-    // Stream timed out, resume
-    Serial.println("[Firebase] Stream timed out, resuming...");
-    fbdo.resumeStream();
-  }
-}
-
-void setRelay(bool turnOn) {
-  digitalWrite(RELAY_PIN, turnOn ? RELAY_ACTIVE_LEVEL : !RELAY_ACTIVE_LEVEL);
-
-  // Update device status in database
-  String path = String("/devices/") + DEVICE_ID;
-  FirebaseJson updateJson;
-  updateJson.set("status", turnOn ? "on" : "off");
-  updateJson.set("lastUpdated", millis());
-
-  if (Firebase.RTDB.updateNode(&fbdo, path.c_str(), &updateJson)) {
-    Serial.printf("Relay turned %s and status updated\n", turnOn ? "ON" : "OFF");
-  } else {
-    Serial.printf("Failed to update status: %s\n", fbdo.errorReason().c_str());
-  }
-
-  // Clear the command so UI shows empty after execution
-  String cmdPath = String("/devices/") + DEVICE_ID + "/command";
-  Firebase.RTDB.deleteNode(&fbdo, cmdPath.c_str());
 }

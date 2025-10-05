@@ -42,7 +42,7 @@ import {
 } from '@chakra-ui/react';
 import { FiArrowLeft, FiPower, FiAlertTriangle, FiEdit } from 'react-icons/fi';
 import { database } from '../firebase/config';
-import { ref, onValue, update, get } from 'firebase/database';
+import { ref, onValue, update, get, push } from 'firebase/database';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -210,6 +210,17 @@ const DeviceDetail = () => {
         command: newStatus,
         lastUpdated: new Date().getTime()
       });
+      const ts = Date.now();
+      await update(deviceRef, { 
+        status: newStatus,
+        command: newStatus,
+        lastUpdated: ts
+      });
+      await push(ref(database, `deviceHistory/${deviceId}`), {
+        status: newStatus,
+        timestamp: ts,
+        source: 'user'
+      });
       
       toast({
         title: 'Success',
@@ -282,16 +293,26 @@ const DeviceDetail = () => {
     ]
   };
 
+  // Combined chart configuration
   const chartOptions = {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: {
         position: 'top',
       },
+      tooltip: {
+        mode: 'index',
+        intersect: false,
+      },
     },
     scales: {
       y: {
-        beginAtZero: true
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Value'
+        }
       }
     }
   };
@@ -405,44 +426,75 @@ const DeviceDetail = () => {
         </Card>
       </SimpleGrid>
 
-      {/* Historical Data */}
+      {/* Combined Chart Section */}
       <Heading size="md" mb={4}>Historical Data</Heading>
-      <Tabs isFitted variant="enclosed" mb={8}>
-        <TabList>
-          <Tab>Voltage</Tab>
-          <Tab>Current</Tab>
-          <Tab>Power</Tab>
-        </TabList>
-        <TabPanels>
-          <TabPanel>
-            <Box p={4} borderWidth="1px" borderRadius="lg">
-              {historicalData.timestamps.length > 0 ? (
-                <Line data={voltageChartData} options={chartOptions} />
-              ) : (
-                <Text textAlign="center" py={10}>No historical voltage data available</Text>
-              )}
+      <Card mb={8}>
+        <CardBody>
+          {historicalData.timestamps.length > 0 ? (
+            <Box h={{ base: "250px", md: "300px" }}>
+              <Line 
+                options={{
+                  ...chartOptions,
+                  scales: {
+                    y: {
+                      type: 'linear',
+                      display: true,
+                      position: 'left',
+                      title: {
+                        display: true,
+                        text: 'Voltage (V) / Current (A)'
+                      }
+                    },
+                    y1: {
+                      type: 'linear',
+                      display: true,
+                      position: 'right',
+                      title: {
+                        display: true,
+                        text: 'Power (W)'
+                      },
+                      grid: {
+                        drawOnChartArea: false
+                      }
+                    }
+                  }
+                }}
+                data={{
+                  labels: historicalData.timestamps,
+                  datasets: [
+                    {
+                      label: 'Voltage (V)',
+                      data: historicalData.voltage,
+                      borderColor: 'rgba(54, 162, 235, 1)',
+                      backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                      tension: 0.4,
+                      yAxisID: 'y'
+                    },
+                    {
+                      label: 'Current (A)',
+                      data: historicalData.current,
+                      borderColor: 'rgba(255, 159, 64, 1)',
+                      backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                      tension: 0.4,
+                      yAxisID: 'y'
+                    },
+                    {
+                      label: 'Power (W)',
+                      data: historicalData.power,
+                      borderColor: 'rgba(75, 192, 192, 1)',
+                      backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                      tension: 0.4,
+                      yAxisID: 'y1'
+                    }
+                  ]
+                }}
+              />
             </Box>
-          </TabPanel>
-          <TabPanel>
-            <Box p={4} borderWidth="1px" borderRadius="lg">
-              {historicalData.timestamps.length > 0 ? (
-                <Line data={currentChartData} options={chartOptions} />
-              ) : (
-                <Text textAlign="center" py={10}>No historical current data available</Text>
-              )}
-            </Box>
-          </TabPanel>
-          <TabPanel>
-            <Box p={4} borderWidth="1px" borderRadius="lg">
-              {historicalData.timestamps.length > 0 ? (
-                <Line data={powerChartData} options={chartOptions} />
-              ) : (
-                <Text textAlign="center" py={10}>No historical power data available</Text>
-              )}
-            </Box>
-          </TabPanel>
-        </TabPanels>
-      </Tabs>
+          ) : (
+            <Text textAlign="center" py={10}>No historical data available</Text>
+          )}
+        </CardBody>
+      </Card>
 
       {/* Energy Consumption removed as per requirement */}
       

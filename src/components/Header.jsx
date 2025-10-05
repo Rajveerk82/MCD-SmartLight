@@ -11,18 +11,18 @@ import {
   Menu,
   MenuButton,
   MenuList,
-  MenuItem
+  MenuItem,
 } from '@chakra-ui/react';
 import { FiMoon, FiSun, FiBell } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 
 const Header = () => {
   const { colorMode, toggleColorMode } = useColorMode();
   const { currentUser } = useAuth();
-  const { darkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
+
+  const darkMode = colorMode === 'dark';
 
   const handleScroll = (sectionId) => {
     const element = document.getElementById(sectionId);
@@ -31,9 +31,7 @@ const Header = () => {
     }
   };
 
-  // Toggle both Chakra UI color mode and custom theme context
   const handleThemeToggle = () => {
-    toggleTheme();
     toggleColorMode();
   };
 
@@ -60,7 +58,6 @@ const Header = () => {
             variant="ghost"
             onClick={() => handleScroll('features')}
           />
-
           {!currentUser && (
             <>
               <IconButton

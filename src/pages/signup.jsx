@@ -15,6 +15,7 @@ import {
   InputGroup,
   InputRightElement,
   IconButton,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
@@ -29,6 +30,11 @@ const Signup = () => {
   const { signup } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+
+  const pageBg = useColorModeValue('gray.50', 'gray.800');
+  const cardBg = useColorModeValue('white', 'gray.700');
+  const headingColor = useColorModeValue('blue.600', 'blue.200');
+  const subTextColor = useColorModeValue('gray.500', 'gray.300');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -80,18 +86,18 @@ const Signup = () => {
   };
 
   return (
-    <Flex minH="100vh" align="center" justify="center" bg="gray.50">
+    <Flex minH="100vh" align="center" justify="center" bg={pageBg}>
       <Box
         p={8}
         maxWidth="400px"
         borderWidth={1}
         borderRadius={8}
         boxShadow="lg"
-        bg="white"
+        bg={cardBg}
       >
         <Box textAlign="center">
-          <Heading mb={6}>MCD Street Light Control</Heading>
-          <Text fontSize="xl" mb={4}>Create an Account</Text>
+          <Heading mb={6} color={headingColor}>MCD Street Light Control</Heading>
+          <Text fontSize="xl" color={subTextColor} mb={4}>Create an Account</Text>
         </Box>
         <form onSubmit={handleSubmit}>
           <Stack spacing={4}>

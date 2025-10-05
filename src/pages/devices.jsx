@@ -26,7 +26,7 @@ import {
 } from '@chakra-ui/react';
 import { FiSearch, FiPower, FiMapPin, FiClock, FiZap, FiBatteryCharging, FiAlertTriangle } from 'react-icons/fi';
 import { database } from '../firebase/config';
-import { ref, onValue, update } from 'firebase/database';
+import { ref, onValue, update, push } from 'firebase/database';
 
 const Devices = () => {
   const [devices, setDevices] = useState([]);
@@ -113,9 +113,15 @@ const Devices = () => {
   const toggleDeviceStatus = async (deviceId, currentStatus) => {
     const newStatus = currentStatus === 'on' ? 'off' : 'on';
     try {
+      const ts = Date.now();
       await update(ref(database, `devices/${deviceId}`), {
         status: newStatus,
-        lastUpdated: new Date().getTime()
+        lastUpdated: ts
+      });
+      // log history
+      await push(ref(database, `deviceHistory/${deviceId}`), {
+        status: newStatus,
+        timestamp: ts
       });
     } catch (error) {
       console.error("Error toggling device status:", error);
