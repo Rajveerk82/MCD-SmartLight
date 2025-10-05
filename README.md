@@ -1,6 +1,8 @@
 # MCD SmartLight Web Dashboard
 
 An interactive web dashboard for monitoring and controlling **MCD SmartLight** IoT devices.  
+🔗 **Live Demo**: https://mcd-smartlight.onrender.com
+
 The project is built with **React** (Vite), leverages **Firebase** for authentication, and communicates with ESP32-based firmware over standard HTTP/MQTT endpoints.
 
 ---
