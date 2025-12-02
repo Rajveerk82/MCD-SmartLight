@@ -7,7 +7,7 @@ The project is built with **React** (Vite), leverages **Firebase** for authentic
 
 ---
 
-## ✨ Features
+## ✨ Features 
 
 1. **Real-time Device Status** – View current voltage, current, power and energy metrics reported by each SmartLight node.
 2. **Device Management** – Add new devices, update device details and remove defective units.
